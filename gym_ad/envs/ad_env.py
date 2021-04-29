@@ -11,7 +11,7 @@ class AdEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
-        self.max_temp = 10
+        self.max_temp = 9
         self.num_alert_prediction_steps = 3
 
         self.prob = [float(1) / 3] * 3
@@ -38,8 +38,9 @@ class AdEnv(gym.Env):
         assert self.steps_from_alert == self.num_alert_prediction_steps + 1 and action == 1, \
             'Must choose wait action if alert is triggered'
 
-        temp_delta_next_step = np.random.choice(self.temp_delta, size=1, p=self.prob)
-        self._update_current_temp(temp_delta_next_step)
+        self.last_delta = np.random.choice(self.temp_delta, size=1, p=self.prob)
+        self._update_current_temp()
+        self.last_action = action
 
         reward = 0
         done = False
@@ -73,10 +74,17 @@ class AdEnv(gym.Env):
     def reset(self):
         self.current_temp = self.max_temp
         self.steps_from_alert = self.num_alert_prediction_steps + 1
-        return
+        return self._get_obs()
 
     def render(self, mode='human'):
-        pass
+        desc = np.asarray(np.arange(0, self.max_temp + 1, 1).tolist(), dtype='c')
+        desc = [c.decode('utf-8') for c in desc]
+        desc[self.current_temp] = utils.colorize(desc[self.current_temp], "red", highlight=True)
+        if self.last_action in [0, 1]:
+            print("Last Action: {}".format(["Wait", "Alert"][self.last_action]))
+        if self.last_delta in [-1, 0, 1]:
+            print("Last Delta: {}".format(self.last_delta))
+        print(desc)
 
     def close(self):
         pass
@@ -85,8 +93,8 @@ class AdEnv(gym.Env):
         return {"temperature": self.current_temp,
                 "steps_from_alert": self.steps_from_alert}
 
-    def _update_current_temp(self, temp_delta_next_step):
-        self.current_temp += temp_delta_next_step
+    def _update_current_temp(self):
+        self.current_temp += self.last_delta
         if self.current_temp > self.max_temp:
             self.current_temp = self.max_temp
 
