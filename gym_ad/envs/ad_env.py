@@ -11,11 +11,13 @@ class AdEnv(gym.Env):
 
     def __init__(self):
         self.max_temp = Constants.MAX_TEMP
+        self.max_steps_from_alert = Constants.ALERT_PREDICTION_STEPS + 1
+
         self.desc = np.arange(0, self.max_temp + 1, 1).tolist()
         self.num_alert_prediction_steps = Constants.ALERT_PREDICTION_STEPS
 
         self.prob = [float(1) / 3] * 3
-        self.temp_delta = [-1, 0, 1]
+        self.temperature_delta = [-1, 0, 1]
 
         self.observation_space = spaces.Dict({
             Keyword.TEMPERATURE: spaces.Discrete(self.max_temp + 1),
@@ -24,10 +26,10 @@ class AdEnv(gym.Env):
             # num_steps (1, 2, .. n) + no_alert (n + 1) + alert_time (0)
         })
         self.action_space = spaces.Discrete(2)  # wait , alert
-        self.P = self._create_transition()
 
         self.current_temp = None
         self.steps_from_alert = None
+        self.P = self._create_transition()
 
         self.last_action = None
         self.last_delta = None
@@ -39,7 +41,7 @@ class AdEnv(gym.Env):
         assert self.steps_from_alert == self.num_alert_prediction_steps + 1 and action == 0, \
             'Must choose wait action if alert is triggered'
 
-        self.last_delta = np.random.choice(self.temp_delta, size=1, p=self.prob)
+        self.last_delta = np.random.choice(self.temperature_delta, size=1, p=self.prob)
         self._update_current_temp()
         self.last_action = action
 
@@ -119,78 +121,210 @@ class AdEnv(gym.Env):
         return Reward.FALSE_ALERT, False
 
     def _create_transition(self):
-        num_states_steps = self.observation_space[Keyword.STEPS_FROM_ALERT].n
+        num_states_steps_from_alert = self.observation_space[Keyword.STEPS_FROM_ALERT].n
         num_states_temp = self.observation_space[Keyword.TEMPERATURE].n
+        num_actions = self.action_space.n
 
         P = {curr_temp: {
-            steps: [] for steps in range(num_states_steps)
+            step: {
+                action: [] for action in range(num_actions)
+            } for step in range(num_states_steps_from_alert)
         } for curr_temp in range(num_states_temp)}
 
         for curr_temp in range(num_states_temp):
-            for steps_to_alert in range(num_states_steps):
-
-                if steps_to_alert == num_states_steps:
-                    if 1 < curr_temp < self.max_temp:
-                        for i in range(len(self.prob)):
-                            P[curr_temp][steps_to_alert].append(
-                                (self.prob[i],
-                                 {Keyword.TEMPERATURE: curr_temp + self.temp_delta[i],
-                                  Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                                  },
-                                 0,
-                                 False)
-                            )
-
-                    if curr_temp == 1:
-                        P[curr_temp][steps_to_alert].append(
-                            (self.prob[0],
-                             {Keyword.TEMPERATURE: curr_temp + self.temp_delta[0],
-                              Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                              },
-                             Reward.MISSED_ALERT,
-                             True)
-                        )
-
-                        for i in range(1, 3):
-                            P[curr_temp][steps_to_alert].append(
-                                (self.prob[i],
-                                 {Keyword.TEMPERATURE: curr_temp + self.temp_delta[i],
-                                  Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                                  },
-                                 0,
-                                 False)
-                            )
-
-                    if curr_temp == 0:
-                        P[curr_temp][steps_to_alert].append(
-                            (1,
-                             {Keyword.TEMPERATURE: self.max_temp,
-                              Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                              },
-                             0,
-                             False)
-                        )
+            for steps_from_alert in range(num_states_steps_from_alert):
+                for action in range(num_actions):
 
                     if curr_temp == self.max_temp:
-                        P[curr_temp][steps_to_alert].append(
-                            (self.prob[0],
-                             {
-                                 Keyword.TEMPERATURE: self.max_temp + self.temp_delta[0]
-                                 Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                             },
-                             0,
-                             False)
-                        )
-                        P[curr_temp][steps_to_alert].append(
-                            (
-                                self.prob[0] + self.prob[1],
-                                {
-                                    Keyword.TEMPERATURE: self.max_temp,
-                                    Keyword.STEPS_FROM_ALERT: self.steps_from_alert
-                                }
-                            )
-                        )
-                else:
+                        reward = 0
+                        done = False
 
+                        delta_step_from_alert = None
 
-        return 0
+                        if steps_from_alert == self.max_steps_from_alert:
+                            if action == 0:
+                                delta_step_from_alert = 0
+                            else:
+                                delta_step_from_alert = -1
+
+                        elif 1 < steps_from_alert < self.max_steps_from_alert:
+                            if action == 0:
+                                delta_step_from_alert = -1
+                            else:
+                                continue
+
+                        elif steps_from_alert == 1:
+                            if action == 0:
+                                delta_step_from_alert = -1
+                                reward = Reward.FALSE_ALERT
+                            else:
+                                continue
+
+                        elif steps_from_alert == 0:
+                            if action == 0:
+                                delta_step_from_alert = self.max_steps_from_alert
+                            else:
+                                delta_step_from_alert = self.max_steps_from_alert - 1
+
+                        for i in range(len(self.prob) - 1):
+                            temp_delta = self.temperature_delta[i]
+
+                            if temp_delta == -1:
+                                prob = self.prob[i]
+                            else:
+                                prob = self.prob[i] + self.prob[i + 1]
+
+                            self._append_to_transition(P,
+                                                       prob=prob,
+                                                       curr_temperature=curr_temp,
+                                                       delta_temperature=temp_delta,
+                                                       curr_steps_from_alert=steps_from_alert,
+                                                       delta_steps_from_alert=delta_step_from_alert,
+                                                       action=action,
+                                                       reward=reward,
+                                                       done=done)
+
+                    elif 1 < curr_temp < self.max_temp:
+                        reward = Reward.FALSE_ALERT if steps_from_alert == 1 else 0
+                        delta_step_from_alert = 0
+
+                        if steps_from_alert == self.max_steps_from_alert:
+                            if action == 0:
+                                delta_step_from_alert = 0
+                            else:
+                                delta_step_from_alert = -1
+
+                        elif 1 <= steps_from_alert < self.max_steps_from_alert:
+                            if action == 0:
+                                delta_step_from_alert = -1
+                            else:
+                                continue
+
+                        elif steps_from_alert == 0:
+                            if action == 0:
+                                delta_step_from_alert = self.max_steps_from_alert
+                            else:
+                                delta_step_from_alert = self.max_steps_from_alert - 1
+
+                        for i in range(len(self.prob)):
+                            self._append_to_transition(P,
+                                                       prob=self.prob[i],
+                                                       curr_temperature=curr_temp,
+                                                       delta_temperature=self.temperature_delta[i],
+                                                       curr_steps_from_alert=steps_from_alert,
+                                                       delta_steps_from_alert=delta_step_from_alert,
+                                                       action=action,
+                                                       reward=reward,
+                                                       done=False)
+
+                    elif curr_temp == 1:
+                        delta_step_from_alert = None
+
+                        for i in range(len(self.prob)):
+                            temp_delta = self.temperature_delta[i]
+                            done = True if temp_delta == -1 else False
+                            reward = 0
+
+                            if steps_from_alert == self.max_steps_from_alert:
+                                if action == 0:
+                                    delta_step_from_alert = 0
+                                    if temp_delta == -1:
+                                        reward = Reward.MISSED_ALERT
+                                else:
+                                    delta_step_from_alert = -1
+                                    if temp_delta == -1:
+                                        reward = Reward.GOOD_ALERT
+                                        delta_step_from_alert = 0
+
+                            elif 1 < steps_from_alert < self.max_steps_from_alert:
+                                if action == 0:
+                                    delta_step_from_alert = -1
+                                    if temp_delta == -1:
+                                        reward = Reward.GOOD_ALERT
+                                else:
+                                    continue
+
+                            elif steps_from_alert == 1:
+                                if action == 0:
+                                    delta_step_from_alert = -1
+                                    if temp_delta == -1:
+                                        reward = Reward.GOOD_ALERT
+                                    else:
+                                        reward = Reward.FALSE_ALERT
+                                else:
+                                    continue
+
+                            elif steps_from_alert == 0:
+                                if action == 0:
+                                    delta_step_from_alert = self.max_steps_from_alert
+                                    if temp_delta == -1:
+                                        reward = Reward.MISSED_ALERT
+                                else:
+                                    delta_step_from_alert = self.max_steps_from_alert - 1
+                                    if temp_delta == -1:
+                                        reward = Reward.GOOD_ALERT
+                                        delta_step_from_alert = self.max_steps_from_alert
+
+                            self._append_to_transition(P,
+                                                       prob=self.prob[i],
+                                                       curr_temperature=curr_temp,
+                                                       delta_temperature=temp_delta,
+                                                       curr_steps_from_alert=steps_from_alert,
+                                                       delta_steps_from_alert=delta_step_from_alert,
+                                                       action=action,
+                                                       reward=reward,
+                                                       done=done)
+
+                    elif curr_temp == 0:
+                        if action == 0:
+                            temp_delta = self.max_temp
+                            reward = 0
+                            done = False
+
+                            delta_step_from_alert = self.max_steps_from_alert - steps_from_alert
+
+                            self._append_to_transition(P,
+                                                       prob=1,
+                                                       curr_temperature=curr_temp,
+                                                       delta_temperature=temp_delta,
+                                                       curr_steps_from_alert=steps_from_alert,
+                                                       delta_steps_from_alert=delta_step_from_alert,
+                                                       action=action,
+                                                       reward=reward,
+                                                       done=done)
+                        else:
+                            continue
+
+        return P
+
+    def _append_to_transition(self,
+                              P,
+                              prob,
+                              curr_temperature,
+                              delta_temperature,
+                              curr_steps_from_alert,
+                              delta_steps_from_alert,
+                              action,
+                              reward,
+                              done
+                              ):
+
+        next_temperature = curr_temperature + delta_temperature
+        next_step_from_alert = curr_steps_from_alert + delta_steps_from_alert
+
+        next_state = {Keyword.TEMPERATURE: next_temperature,
+                      Keyword.STEPS_FROM_ALERT: next_step_from_alert}
+
+        self._append_to_transition_inner(P, curr_temperature, curr_steps_from_alert, action, prob,
+                                         next_state, reward, done)
+
+    @staticmethod
+    def _append_to_transition_inner(P, curr_temp, steps_from_alert, action, prob, next_state, reward, done):
+        P[curr_temp][steps_from_alert][action].append(
+            (
+                prob,
+                next_state,
+                reward,
+                done
+            )
+        )
