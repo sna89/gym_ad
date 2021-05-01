@@ -1,7 +1,7 @@
 
 
 class Constants:
-    MAX_TEMP = 10
+    MAX_TEMP = 5
     ALERT_PREDICTION_STEPS = 3
     PERIODS = 144
 

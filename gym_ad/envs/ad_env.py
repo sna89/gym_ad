@@ -4,6 +4,7 @@ from gym.utils import seeding
 import numpy as np
 from colorama import Style, Fore
 from constants import Constants, Reward, Keyword
+from gym.envs.toy_text.discrete import categorical_sample
 
 
 class AdEnv(gym.Env):
@@ -16,8 +17,8 @@ class AdEnv(gym.Env):
         self.desc = np.arange(0, self.max_temp + 1, 1).tolist()
         self.num_alert_prediction_steps = Constants.ALERT_PREDICTION_STEPS
 
-        self.prob = [float(1) / 3] * 3
-        self.temperature_delta = [-1, 0, 1]
+        self.prob_list = [float(1) / 3] * 3
+        self.temperature_delta_list = [-1, 0, 1]
 
         self.observation_space = spaces.Dict({
             Keyword.TEMPERATURE: spaces.Discrete(self.max_temp + 1),
@@ -27,98 +28,61 @@ class AdEnv(gym.Env):
         })
         self.action_space = spaces.Discrete(2)  # wait , alert
 
-        self.current_temp = None
-        self.steps_from_alert = None
         self.P = self._create_transition()
 
+        self.np_random = None
         self.last_action = None
-        self.last_delta = None
 
+        self.current_state = dict()
+        self.seed()
         self.reset()
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
 
     def step(self, action):
         assert self.action_space.contains(action)
-        assert self.steps_from_alert == self.num_alert_prediction_steps + 1 and action == 0, \
+        assert (0 < self.current_state[Keyword.STEPS_FROM_ALERT] < self.max_steps_from_alert and action == 0)\
+            or self.current_state[Keyword.STEPS_FROM_ALERT] == 0\
+            or self.current_state[Keyword.STEPS_FROM_ALERT] == self.max_steps_from_alert, \
             'Must choose wait action if alert is triggered'
 
-        self.last_delta = np.random.choice(self.temperature_delta, size=1, p=self.prob)
-        self._update_current_temp()
         self.last_action = action
+        transitions = self.P[self.current_state[Keyword.TEMPERATURE]][self.current_state[Keyword.STEPS_FROM_ALERT]][action]
 
-        reward = 0
-        done = False
+        i = categorical_sample([t[0] for t in transitions], self.np_random)
+        prob, self.current_state, reward, done = transitions[i]
 
-        if action:  # alert
-            self.steps_from_alert = self.num_alert_prediction_steps
-            if self.current_temp == 0:
-                reward, done = self._missed_alert()
-
-        else:  # wait
-            if self.steps_from_alert == self.num_alert_prediction_steps + 1:  # no triggered alert
-                if self.current_temp == 0:
-                    reward, done = self._missed_alert()
-
-            elif self.num_alert_prediction_steps + 1 > self.steps_from_alert > 0:  # Active triggered alert
-                if self.current_temp == 0:
-                    reward, done = self._good_alert()
-                self.steps_from_alert -= 1
-
-            elif self.steps_from_alert == 0:  # Active triggered alert - last time step
-                if self.current_temp == 0:
-                    reward, done = self._good_alert()
-
-                elif self.current_temp > 0:
-                    reward, done = self._false_alert()
-
-                self.steps_from_alert = self.num_alert_prediction_steps + 1
-
-        return self._get_obs(), reward, done, {}
+        return self.current_state, reward, done, {}
 
     def reset(self):
-        self.current_temp = self.max_temp
-        self.steps_from_alert = self.num_alert_prediction_steps + 1
+        self.current_state[Keyword.TEMPERATURE] = self.max_temp
+        self.current_state[Keyword.STEPS_FROM_ALERT] = self.max_steps_from_alert
         return self._get_obs()
 
     def render(self, mode='human'):
-        if self.last_action in [0, 1]:
+        if self.last_action is not None:
             print("Last Action: {}".format(["Wait", "Alert"][self.last_action]))
-        if self.last_delta in [-1, 0, 1]:
-            print("Last Delta: {}".format(self.last_delta))
+
+        if self.current_state[Keyword.STEPS_FROM_ALERT] is not None:
+            print("Steps from alert: {}".format(self.current_state[Keyword.STEPS_FROM_ALERT]))
+
         for i in self.desc:
-            if i == self.current_temp:
+            if i == self.current_state[Keyword.TEMPERATURE]:
                 print(f'{Fore.RED}{self.desc[i]}{Style.RESET_ALL}', end=" ")
             else:
                 print(self.desc[i], end=" ")
 
             if i == self.max_temp:
                 print()
+                print()
 
     def close(self):
         pass
 
     def _get_obs(self):
-        return {Keyword.TEMPERATURE: self.current_temp,
-                Keyword.STEPS_FROM_ALERT: self.steps_from_alert}
-
-    def _update_current_temp(self):
-        self.current_temp += self.last_delta
-        if self.current_temp > self.max_temp:
-            self.current_temp = self.max_temp
-
-        if self.current_temp < 0:
-            self.current_temp = 0
-
-    def _missed_alert(self):
-        self.reset()
-        return Reward.MISSED_ALERT, True
-
-    def _good_alert(self):
-        self.reset()
-        return Reward.GOOD_ALERT, True
-
-    @staticmethod
-    def _false_alert():
-        return Reward.FALSE_ALERT, False
+        return self.current_state
 
     def _create_transition(self):
         num_states_steps_from_alert = self.observation_space[Keyword.STEPS_FROM_ALERT].n
@@ -166,13 +130,14 @@ class AdEnv(gym.Env):
                             else:
                                 delta_step_from_alert = self.max_steps_from_alert - 1
 
-                        for i in range(len(self.prob) - 1):
-                            temp_delta = self.temperature_delta[i]
+                        for i in range(len(self.prob_list) - 1):
+                            temp_delta = self.temperature_delta_list[i]
 
                             if temp_delta == -1:
-                                prob = self.prob[i]
+                                prob = self.prob_list[i] + self.prob_list[i + 1]
                             else:
-                                prob = self.prob[i] + self.prob[i + 1]
+                                prob = self.prob_list[i]
+                                temp_delta = 0
 
                             self._append_to_transition(P,
                                                        prob=prob,
@@ -206,11 +171,11 @@ class AdEnv(gym.Env):
                             else:
                                 delta_step_from_alert = self.max_steps_from_alert - 1
 
-                        for i in range(len(self.prob)):
+                        for i in range(len(self.prob_list)):
                             self._append_to_transition(P,
-                                                       prob=self.prob[i],
+                                                       prob=self.prob_list[i],
                                                        curr_temperature=curr_temp,
-                                                       delta_temperature=self.temperature_delta[i],
+                                                       delta_temperature=self.temperature_delta_list[i],
                                                        curr_steps_from_alert=steps_from_alert,
                                                        delta_steps_from_alert=delta_step_from_alert,
                                                        action=action,
@@ -220,8 +185,8 @@ class AdEnv(gym.Env):
                     elif curr_temp == 1:
                         delta_step_from_alert = None
 
-                        for i in range(len(self.prob)):
-                            temp_delta = self.temperature_delta[i]
+                        for i in range(len(self.prob_list)):
+                            temp_delta = self.temperature_delta_list[i]
                             done = True if temp_delta == -1 else False
                             reward = 0
 
@@ -233,14 +198,14 @@ class AdEnv(gym.Env):
                                 else:
                                     delta_step_from_alert = -1
                                     if temp_delta == -1:
-                                        reward = Reward.GOOD_ALERT
+                                        reward = Reward.GOOD_ALERT * (steps_from_alert + 1)
                                         delta_step_from_alert = 0
 
                             elif 1 < steps_from_alert < self.max_steps_from_alert:
                                 if action == 0:
                                     delta_step_from_alert = -1
                                     if temp_delta == -1:
-                                        reward = Reward.GOOD_ALERT
+                                        reward = Reward.GOOD_ALERT * (steps_from_alert + 1)
                                 else:
                                     continue
 
@@ -248,7 +213,7 @@ class AdEnv(gym.Env):
                                 if action == 0:
                                     delta_step_from_alert = -1
                                     if temp_delta == -1:
-                                        reward = Reward.GOOD_ALERT
+                                        reward = Reward.GOOD_ALERT * (steps_from_alert + 1)
                                     else:
                                         reward = Reward.FALSE_ALERT
                                 else:
@@ -262,11 +227,10 @@ class AdEnv(gym.Env):
                                 else:
                                     delta_step_from_alert = self.max_steps_from_alert - 1
                                     if temp_delta == -1:
-                                        reward = Reward.GOOD_ALERT
-                                        delta_step_from_alert = self.max_steps_from_alert
+                                        reward = Reward.GOOD_ALERT * (steps_from_alert + 1)
 
                             self._append_to_transition(P,
-                                                       prob=self.prob[i],
+                                                       prob=self.prob_list[i],
                                                        curr_temperature=curr_temp,
                                                        delta_temperature=temp_delta,
                                                        curr_steps_from_alert=steps_from_alert,
