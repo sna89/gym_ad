@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Dict, List
-from constants import Constants, Keyword
+from constants import AD_V0_CONST, Keyword
 from gym import spaces
 import copy
 
@@ -9,15 +9,19 @@ states = (current_temp, steps_from_alert)
 """
 
 
+def get_gamma():
+    return 1 - 1 / float(AD_V0_CONST.PERIODS)
+
+
 def init_value_function(num_states_temp, num_states_steps):
     return {c_temp: {
-        step: 0 for step in range(num_states_steps)
+        step: 0 for step in range(1, num_states_steps + 1)
     } for c_temp in range(num_states_temp)}
 
 
 def init_policy(num_states_temp, num_states_steps):
     return {c_temp: {
-        step: 0 for step in range(num_states_steps)
+        step: 0 for step in range(1, num_states_steps + 1)
     } for c_temp in range(num_states_temp)}
 
 
@@ -26,11 +30,11 @@ def init_actions(num_actions):
 
 
 def init_states():
-    return [(c_temp, steps) for c_temp in range(Constants.MAX_TEMP)
-            for steps in range(Constants.ALERT_PREDICTION_STEPS + 2)]
+    return [(c_temp, steps) for c_temp in range(AD_V0_CONST.MAX_TEMP)
+            for steps in range(AD_V0_CONST.ALERT_PREDICTION_STEPS + 2)]
 
 
-def policy_iteration(P, state_space: spaces, action_space: spaces, gamma, tol: float = 10e-1):
+def policy_iteration(P, state_space: spaces, action_space: spaces, gamma, tol: float = 0.1):
     num_states_temp = state_space[Keyword.TEMPERATURE].n
     num_states_steps = state_space[Keyword.STEPS_FROM_ALERT].n
 
@@ -64,7 +68,7 @@ def policy_evaluation(P, policy, state_space, gamma, tol):
     while delta > tol:
         new_value_function = copy.deepcopy(value_function)
         for curr_temp in range(num_states_temp):
-            for steps_from_alert in range(num_states_steps):
+            for steps_from_alert in range(1, num_states_steps + 1):
                 action = policy[curr_temp][steps_from_alert]
                 current_value = 0
                 for prob, next_state, reward, done in P[curr_temp][steps_from_alert][action]:
@@ -87,7 +91,7 @@ def policy_improvement(P, state_space, action_space, value_from_policy, policy, 
     new_policy = copy.deepcopy(policy)
 
     for curr_temp in range(num_states_temp):
-        for steps_from_alert in range(num_states_steps):
+        for steps_from_alert in range(1, num_states_steps + 1):
             policy_action = policy[curr_temp][steps_from_alert]
             max_reward = value_from_policy[curr_temp][steps_from_alert]
             for alt_action in range(action_space.n):
