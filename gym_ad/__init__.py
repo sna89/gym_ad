@@ -1,15 +1,19 @@
 from gym.envs.registration import register
-from constants import AD_V0_CONST, AD_V1_CONST
+from config import get_config
+
+
+config_ad_v0 = get_config("AD_V0")
+config_ad_v1 = get_config("AD_V1")
 
 register(
     id='ad-v0',
     entry_point='gym_ad.envs:AdOneStepEnv',
-    kwargs={'max_temp': AD_V0_CONST.MAX_TEMP, 'alert_prediction_steps': AD_V0_CONST.ALERT_PREDICTION_STEPS}
+    kwargs={"config": config_ad_v0}
 )
 
 register(
     id='ad-v1',
-    entry_point='gym_ad.envs:AdGaussianStepEnv',
-    kwargs={'max_temp': AD_V1_CONST.MAX_TEMP, 'alert_prediction_steps': AD_V1_CONST.ALERT_PREDICTION_STEPS}
+    entry_point='gym_ad.envs:AdCustomStepEnv',
+    kwargs={"config": config_ad_v1}
 
 )

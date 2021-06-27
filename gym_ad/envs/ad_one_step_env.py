@@ -1,15 +1,15 @@
 from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
-from constants import AD_V0_CONST, Reward, Keyword
+from config import Keyword
 from gym_ad.envs.ad_env import AdEnv
 
 
 class AdOneStepEnv(AdEnv):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, max_temp, alert_prediction_steps):
-        super(AdOneStepEnv, self).__init__(max_temp, alert_prediction_steps)
+    def __init__(self, config):
+        super(AdOneStepEnv, self).__init__(config)
 
     def _create_observation_space(self):
         observation_space = spaces.Dict({
@@ -76,7 +76,7 @@ class AdOneStepEnv(AdEnv):
                         elif steps_from_alert == 1:
                             if action == 0:
                                 delta_step_from_alert = -1
-                                reward = Reward.FALSE_ALERT
+                                reward = self.reward_false_alert
                             else:
                                 continue
 
@@ -106,7 +106,7 @@ class AdOneStepEnv(AdEnv):
                                                                done=done)
 
                     elif 1 < curr_temp < self.max_temp:
-                        reward = Reward.FALSE_ALERT if steps_from_alert == 1 else 0
+                        reward = self.reward_false_alert if steps_from_alert == 1 else 0
                         delta_step_from_alert = 0
 
                         if steps_from_alert == self.max_steps_from_alert:
@@ -150,7 +150,7 @@ class AdOneStepEnv(AdEnv):
                                 if action == 0:
                                     delta_step_from_alert = 0
                                     if temp_delta == -1:
-                                        reward = Reward.MISSED_ALERT
+                                        reward = self.reward_missed_alert
                                 else:
                                     delta_step_from_alert = -1
                                     if temp_delta == -1:
@@ -170,7 +170,7 @@ class AdOneStepEnv(AdEnv):
                                     if temp_delta == -1:
                                         reward = self._get_good_alert_reward(steps_from_alert=steps_from_alert)
                                     else:
-                                        reward = Reward.FALSE_ALERT
+                                        reward = self.reward_false_alert
                                 else:
                                     continue
 
@@ -178,7 +178,7 @@ class AdOneStepEnv(AdEnv):
                                 if action == 0:
                                     delta_step_from_alert = self.max_steps_from_alert
                                     if temp_delta == -1:
-                                        reward = Reward.MISSED_ALERT
+                                        reward = self.reward_missed_alert
                                 else:
                                     delta_step_from_alert = self.max_steps_from_alert - 1
                                     if temp_delta == -1:

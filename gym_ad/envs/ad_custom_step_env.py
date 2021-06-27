@@ -1,16 +1,16 @@
-import gym
 from gym_ad.envs.ad_env import AdEnv
 from gym import spaces
-from constants import Keyword, Reward
+from config import Keyword
 import math
 import numpy as np
+from utils import normalize_list_values
 
 
-class AdGaussianStepEnv(AdEnv):
+class AdCustomStepEnv(AdEnv):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, max_temp, alert_prediction_steps):
-        super(AdGaussianStepEnv, self).__init__(max_temp, alert_prediction_steps)
+    def __init__(self, config):
+        super(AdCustomStepEnv, self).__init__(config)
 
     def _create_observation_space(self):
         observation_space = spaces.Dict({
@@ -64,7 +64,7 @@ class AdGaussianStepEnv(AdEnv):
                                 done = True
                                 if steps_from_alert == self.max_steps_from_alert:
                                     if action == 0:
-                                        reward = Reward.MISSED_ALERT
+                                        reward = self.reward_missed_alert
                                         next_steps_from_alert = steps_from_alert
                                     else:
                                         reward = self._get_good_alert_reward(steps_from_alert - 1)
@@ -102,7 +102,7 @@ class AdGaussianStepEnv(AdEnv):
                                         continue
 
                                 elif steps_from_alert == 1:
-                                    reward = Reward.FALSE_ALERT
+                                    reward = self.reward_false_alert
                                     if action == 0:
                                         next_steps_from_alert = self.max_steps_from_alert
                                     else:
@@ -140,10 +140,13 @@ class AdGaussianStepEnv(AdEnv):
     def _create_state_prob(self, current_temp):
         score_func = lambda x: math.pow(2, -math.fabs(x - current_temp) / 5)
         next_temp_possible_value_list = list(current_temp + np.linspace(start=-10, stop=10, num=21))
-        next_temp_score_list = [score_func(next_temp) for next_temp in next_temp_possible_value_list]
-        score_sum = sum(next_temp_score_list)
-        next_temp_prob_list = [next_temp_score / score_sum for next_temp_score in next_temp_score_list]
+        next_temp_score_list = list(map(lambda x: score_func(x), next_temp_possible_value_list))
+        next_temp_prob_list = normalize_list_values(next_temp_score_list)
+        next_temp_prob_list = self.adjust_temp_values(next_temp_possible_value_list, next_temp_prob_list)
 
+        return next_temp_possible_value_list, next_temp_prob_list
+
+    def adjust_temp_values(self, next_temp_possible_value_list, next_temp_prob_list):
         if min(next_temp_possible_value_list) < 0:
             first_zero_occurrence = next_temp_possible_value_list.index(0)
             prob_zero_value = sum(next_temp_prob_list[:first_zero_occurrence + 1])
@@ -151,11 +154,14 @@ class AdGaussianStepEnv(AdEnv):
             del next_temp_possible_value_list[:first_zero_occurrence]
             next_temp_prob_list.insert(0, prob_zero_value)
 
-        if max(next_temp_possible_value_list) > self.max_temp:
+        elif max(next_temp_possible_value_list) > self.max_temp:
             first_max_temp_occurrence = next_temp_possible_value_list.index(self.max_temp)
             prob_max_temp_value = sum(next_temp_prob_list[first_max_temp_occurrence:])
             del next_temp_prob_list[first_max_temp_occurrence:]
             del next_temp_possible_value_list[first_max_temp_occurrence + 1:]
             next_temp_prob_list.append(prob_max_temp_value)
 
-        return next_temp_possible_value_list, next_temp_prob_list
+        else:
+            pass
+
+        return next_temp_prob_list

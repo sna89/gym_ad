@@ -1,16 +1,16 @@
 import numpy as np
-from typing import Dict, List
-from constants import AD_V0_CONST, Keyword
+from config import Keyword
 from gym import spaces
 import copy
+from utils import nested_dict_to_list
 
 """
 states = (current_temp, steps_from_alert) 
 """
 
 
-def get_gamma():
-    return 1 - 1 / float(AD_V0_CONST.PERIODS)
+def get_gamma(periods):
+    return 1 - 1 / float(periods)
 
 
 def init_value_function(num_states_temp, num_states_steps):
@@ -25,23 +25,18 @@ def init_policy(num_states_temp, num_states_steps):
     } for c_temp in range(num_states_temp)}
 
 
-def init_actions(num_actions):
-    return [i for i in range(num_actions)]
+def policy_iteration(env, config):
+    algorithm = "policy_iteration"
+    gamma = get_gamma(config.get("algorithms").get(algorithm).get("periods"))
+    tol = config.get("algorithms").get(algorithm).get("tol")
 
-
-def init_states():
-    return [(c_temp, steps) for c_temp in range(AD_V0_CONST.MAX_TEMP)
-            for steps in range(AD_V0_CONST.ALERT_PREDICTION_STEPS + 2)]
-
-
-def policy_iteration(P, state_space: spaces, action_space: spaces, gamma, tol: float = 0.1):
+    P, state_space, action_space = env.P, env.observation_space, env.action_space
     num_states_temp = state_space[Keyword.TEMPERATURE].n
     num_states_steps = state_space[Keyword.STEPS_FROM_ALERT].n
 
     value_function = None
-    policy = init_policy(num_states_temp, num_states_steps)
-
     first_epoch = True
+    policy = init_policy(num_states_temp, num_states_steps)
     new_policy = copy.deepcopy(policy)
 
     while first_epoch or not policy == new_policy:
@@ -121,10 +116,3 @@ def calc_delta_value_function(value_function, new_value_function):
 
     return delta
 
-
-def nested_dict_to_list(nested_dict):
-    new_l = list()
-    for inner_dict in nested_dict.values():
-        for value in inner_dict.values():
-            new_l.append(value)
-    return new_l

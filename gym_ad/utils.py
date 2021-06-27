@@ -1,8 +1,7 @@
-from constants import Keyword
+from config import Keyword
 import pandas as pd
 from os import path
-from constants import AD_V0_CONST, AD_V1_CONST, Reward, Keyword
-import numpy as np
+from config import Keyword
 import plotly.express as px
 
 
@@ -77,26 +76,26 @@ def get_csv_report(report_name="report.csv", columns=("False Alert Reward", "Max
     return df
 
 
-def get_max_temp_alert_from_policy(policy):
+def get_max_temp_alert_from_policy(policy, alert_prediction_steps):
     max_temp_alert = 0
     for temp, steps in policy.items():
-
-        if steps[AD_V1_CONST.ALERT_PREDICTION_STEPS + 1] == 1:
+        if steps[alert_prediction_steps + 1] == 1:
             max_temp_alert = temp
     return max_temp_alert
 
 
-def add_to_report(policy, value_function):
+def add_to_report(policy, value_function, alert_prediction_steps, reward_false_alert):
     df = get_csv_report()
 
-    max_temp_alert = get_max_temp_alert_from_policy(policy)
-    value = value_function[max_temp_alert][AD_V1_CONST.ALERT_PREDICTION_STEPS + 1]
+    max_temp_alert = get_max_temp_alert_from_policy(policy, alert_prediction_steps)
+    value = value_function[max_temp_alert][alert_prediction_steps + 1]
 
     new_data = dict()
-    new_data["False Alert Reward"] = Reward.FALSE_ALERT
+    new_data["False Alert Reward"] = reward_false_alert
     new_data["Max Temp Alert"] = max_temp_alert
     new_data["Value"] = value
     df = df.append(new_data, ignore_index=True)
     df.to_csv("report.csv")
 
     return max_temp_alert, value
+

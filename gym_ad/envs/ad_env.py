@@ -1,6 +1,6 @@
 import gym
 from gym.utils import seeding
-from constants import Keyword, Reward
+from config import Keyword
 from gym.envs.toy_text.discrete import categorical_sample
 from colorama import Style, Fore
 import numpy as np
@@ -9,10 +9,14 @@ import numpy as np
 class AdEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, max_temp, alert_prediction_steps):
-        self.max_temp = max_temp
-        self.alert_prediction_steps = alert_prediction_steps
-        self.max_steps_from_alert = alert_prediction_steps + 1
+    def __init__(self, config):
+        self.max_temp = config["env"]["max_temp"]
+        self.alert_prediction_steps = config["env"]["alert_prediction_steps"]
+        self.max_steps_from_alert = self.alert_prediction_steps + 1
+
+        self.reward_false_alert = config["reward"]["false_alert"]
+        self.reward_missed_alert = config["reward"]["missed_alert"]
+        self.reward_good_alert = config["reward"]["good_alert"]
 
         self.observation_space = self._create_observation_space()
         self.action_space = self._create_action_space()
@@ -91,7 +95,7 @@ class AdEnv(gym.Env):
         )
 
     def _get_good_alert_reward(self, steps_from_alert):
-        return Reward.GOOD_ALERT * (self.max_steps_from_alert - steps_from_alert)
+        return self.reward_good_alert * (self.max_steps_from_alert - steps_from_alert)
 
     def render(self, mode='human'):
         desc = np.arange(0, self.max_temp + 1, 1).tolist()
