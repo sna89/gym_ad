@@ -84,7 +84,10 @@ def get_max_temp_alert_from_policy(policy, alert_prediction_steps):
     return max_temp_alert
 
 
-def add_to_report(policy, value_function, alert_prediction_steps, reward_false_alert):
+def add_to_report(policy, value_function, config):
+    alert_prediction_steps = config["env"]["alert_prediction_steps"]
+    reward_false_alert = config["reward"]["false_alert"]
+
     df = get_csv_report()
 
     max_temp_alert = get_max_temp_alert_from_policy(policy, alert_prediction_steps)
@@ -99,3 +102,18 @@ def add_to_report(policy, value_function, alert_prediction_steps, reward_false_a
 
     return max_temp_alert, value
 
+
+def analyze_max_uct_statistics(statistics: pd.DataFrame()):
+    statistics = statistics.drop(columns=['Unnamed: 0'], axis=1)
+    reward_stats = statistics.groupby("Run").sum()["Reward"]
+    temperature_policy = {}
+    for temperature in sorted(list(statistics["Temperature"].unique())):
+        temperature_statistics_df = statistics[(statistics.Temperature == temperature) &
+                                               (statistics.ignore == 0)]
+        if temperature_statistics_df.shape[0] > 0:
+            temperature_action_percentage = temperature_statistics_df[temperature_statistics_df.Action == 1].shape[0] \
+                                            / float(temperature_statistics_df.shape[0])
+            temperature_policy[temperature] = temperature_action_percentage
+    temperature_policy_df = pd.DataFrame.from_dict(temperature_policy, orient='index')
+    print(temperature_policy_df)
+    print(reward_stats)

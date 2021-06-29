@@ -1,9 +1,11 @@
+import numpy as np
+
 
 def get_config(env_name):
     config = {
         "reward": {
-            "missed_alert": -100,
-            "false_alert": -10,
+            "missed_alert": -1000,
+            "false_alert": -100,
             "good_alert": 10,
         }
     }
@@ -21,12 +23,15 @@ def get_config(env_name):
 
     algorithms_config = {
         "policy_iteration": {
-            "periods": 144 * 3,
+            "periods": 24,
             "tol": 1
         },
         "max_uct": {
-            "trial_length": 18,
-            "num_trials": 500
+            "trial_length": 24,
+            "num_trials": 500,
+            "runs": 50,
+            "uct_bias": np.sqrt(2)
+
         }
     }
 

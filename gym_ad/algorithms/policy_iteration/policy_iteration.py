@@ -69,7 +69,7 @@ def policy_evaluation(P, policy, state_space, gamma, tol):
                 for prob, next_state, reward, done in P[curr_temp][steps_from_alert][action]:
                     current_value += prob * (reward +
                                              gamma *
-                                             value_function[next_state[Keyword.TEMPERATURE]][next_state[Keyword.STEPS_FROM_ALERT]])
+                                             value_function[next_state.temperature][next_state.steps_from_alert])
                 new_value_function[curr_temp][steps_from_alert] = current_value
 
         delta = calc_delta_value_function(value_function, new_value_function)
@@ -96,7 +96,7 @@ def policy_improvement(P, state_space, action_space, value_from_policy, policy, 
                     action_allowed = True
                     curr_reward += prob * (reward +
                                            gamma *
-                                           value_from_policy[next_state[Keyword.TEMPERATURE]][next_state[Keyword.STEPS_FROM_ALERT]])
+                                           value_from_policy[next_state.temperature][next_state.steps_from_alert])
 
                 if curr_reward > max_reward and action_allowed:
                     max_reward = curr_reward

@@ -1,21 +1,20 @@
-from dataclasses import dataclass
-# from typing import List
-
-
-@dataclass
-class State:
-    temperature: int
-    steps_from_alert: int
-#    history: List
+from gym_ad.envs.ad_env import State
+from utils import get_argmax_from_list
+import numpy as np
 
 
 class Node:
     def __init__(self, state: State, parent=None):
-        self.state = state
+        self._state = state
         self.parent = parent
         self._value = 0
+        self.visits = 0
 
-        self.successors = []
+        self._successors = []
+
+    @property
+    def successors(self):
+        return self._successors
 
     def add_successor(self, successor):
         self.successors.append(successor)
@@ -28,22 +27,77 @@ class Node:
     def value(self, new_value):
         self._value = new_value
 
+    @property
+    def state(self):
+        return self._state
 
-class DecisionNode:
-    def __init__(self, state: State, parent=None, depth=0):
+    @state.setter
+    def state(self, new_state):
+        self._state = new_state
+
+    def visit(self):
+        self.visits += 1
+
+    def is_first_visit(self):
+        return self.visits == 1
+
+
+class DecisionNode(Node):
+    def __init__(self, state: State, parent=None, terminal=False):
         super(DecisionNode, self).__init__(state, parent)
-        self._depth = depth
+        self.terminal = terminal
+
+    def select_chance_node(self):
+        successor_nodes_uct_values = [chance_node.uct for chance_node in self.successors]
+        max_idx = get_argmax_from_list(successor_nodes_uct_values, choose_random=True)
+        return self.successors[max_idx]
+
+    def is_root(self):
+        return self.parent is None
+
+    def backup_max_uct(self):
+        value = 0
+        if not self.terminal:
+            value = max([node.value for node in self.successors])
+        self.value = value
+
+
+class ChanceNode(Node):
+    def __init__(self, state: State, parent=None, action=None, uct_bias=0):
+        super(ChanceNode, self).__init__(state, parent)
+        self._action = action
+        self._reward = 0
+        self.uct_bias = uct_bias
 
     @property
-    def depth(self):
-        return self._depth
+    def uct(self):
+        if self.visits == 0:
+            uct_value = self.calc_heuristic()
+        else:
+            uct_value = self.uct_bias * np.sqrt(np.log(self.parent.visits) / self.visits) + self.value
+        return uct_value
 
+    def calc_heuristic(self):
+        return np.Inf
 
-class ChanceNode:
-    def __init__(self, state: State, parent=None, action=None):
-        super(ChanceNode, self).__init__(state, parent)
-        self.action = action
+    @property
+    def reward(self):
+        return self._reward
 
+    @reward.setter
+    def reward(self, new_reward):
+        self._reward = new_reward
 
+    @property
+    def action(self):
+        return self._action
 
+    def backup_max_uct(self):
+        nominator = 0
+        for decision_node in self.successors:
+            nominator += decision_node.visits * decision_node.value
+
+        denominator = self.visits
+        q_value = self.reward + nominator / float(denominator)
+        self.value = q_value
 

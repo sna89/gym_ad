@@ -4,6 +4,7 @@ from config import Keyword
 import math
 import numpy as np
 from utils import normalize_list_values
+from gym_ad.envs.ad_env import State
 
 
 class AdCustomStepEnv(AdEnv):
@@ -25,8 +26,8 @@ class AdCustomStepEnv(AdEnv):
         return spaces.Discrete(2)
 
     def reset(self):
-        self.current_state[Keyword.TEMPERATURE] = self.max_temp // 2
-        self.current_state[Keyword.STEPS_FROM_ALERT] = self.max_steps_from_alert
+        self.current_state.temperature = self.max_temp // 2
+        self.current_state.steps_from_alert = self._max_steps_from_alert
         return self._get_obs()
 
     def _create_transition(self):
@@ -42,7 +43,7 @@ class AdCustomStepEnv(AdEnv):
                     if curr_temp == 0:
                         reward = 0
                         done = False
-                        next_steps_from_alert = self.max_steps_from_alert - action
+                        next_steps_from_alert = self._max_steps_from_alert - action
                         self._append_to_transition_wrapper(P,
                                                            prob=1,
                                                            curr_temperature=curr_temp,
@@ -62,18 +63,18 @@ class AdCustomStepEnv(AdEnv):
 
                             if next_temp == 0:
                                 done = True
-                                if steps_from_alert == self.max_steps_from_alert:
+                                if steps_from_alert == self._max_steps_from_alert:
                                     if action == 0:
                                         reward = self.reward_missed_alert
                                         next_steps_from_alert = steps_from_alert
                                     else:
                                         reward = self._get_good_alert_reward(steps_from_alert - 1)
                                         next_steps_from_alert = steps_from_alert - 1
-                                elif 1 <= steps_from_alert < self.max_steps_from_alert:
+                                elif 1 <= steps_from_alert < self._max_steps_from_alert:
                                     if action == 0:
                                         reward = self._get_good_alert_reward(steps_from_alert)
                                         if steps_from_alert == 1:
-                                            next_steps_from_alert = self.max_steps_from_alert
+                                            next_steps_from_alert = self._max_steps_from_alert
                                         else:
                                             next_steps_from_alert = steps_from_alert - 1
                                     else:
@@ -89,13 +90,13 @@ class AdCustomStepEnv(AdEnv):
                                                                    reward=reward,
                                                                    done=done)
                             elif next_temp > 0:
-                                if steps_from_alert == self.max_steps_from_alert:
+                                if steps_from_alert == self._max_steps_from_alert:
                                     if action == 0:
                                         next_steps_from_alert = steps_from_alert
                                     else:
                                         next_steps_from_alert = steps_from_alert - 1
 
-                                elif 1 < steps_from_alert < self.max_steps_from_alert:
+                                elif 1 < steps_from_alert < self._max_steps_from_alert:
                                     if action == 0:
                                         next_steps_from_alert = steps_from_alert - 1
                                     else:
@@ -104,7 +105,7 @@ class AdCustomStepEnv(AdEnv):
                                 elif steps_from_alert == 1:
                                     reward = self.reward_false_alert
                                     if action == 0:
-                                        next_steps_from_alert = self.max_steps_from_alert
+                                        next_steps_from_alert = self._max_steps_from_alert
                                     else:
                                         continue
 
@@ -131,8 +132,7 @@ class AdCustomStepEnv(AdEnv):
                                       done
                                       ):
 
-        next_state = {Keyword.TEMPERATURE: next_temperature,
-                      Keyword.STEPS_FROM_ALERT: next_step_from_alert}
+        next_state = State(next_temperature, next_step_from_alert)
 
         self._append_to_transition(P, curr_temperature, curr_steps_from_alert, action, prob,
                                    next_state, reward, done)

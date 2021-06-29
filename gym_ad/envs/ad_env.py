@@ -4,6 +4,15 @@ from config import Keyword
 from gym.envs.toy_text.discrete import categorical_sample
 from colorama import Style, Fore
 import numpy as np
+from dataclasses import dataclass
+# from typing import List
+
+
+@dataclass
+class State:
+    temperature: int = 0
+    steps_from_alert: int = 0
+#    history: List
 
 
 class AdEnv(gym.Env):
@@ -12,7 +21,7 @@ class AdEnv(gym.Env):
     def __init__(self, config):
         self.max_temp = config["env"]["max_temp"]
         self.alert_prediction_steps = config["env"]["alert_prediction_steps"]
-        self.max_steps_from_alert = self.alert_prediction_steps + 1
+        self._max_steps_from_alert = self.alert_prediction_steps + 1
 
         self.reward_false_alert = config["reward"]["false_alert"]
         self.reward_missed_alert = config["reward"]["missed_alert"]
@@ -26,9 +35,17 @@ class AdEnv(gym.Env):
         self.np_random = None
         self.last_action = None
 
-        self.current_state = dict()
+        self.current_state = State()
         self.seed()
         self.reset()
+
+    @property
+    def max_steps_from_alert(self):
+        return self._max_steps_from_alert
+
+    @property
+    def min_steps_from_alert(self):
+        return 1
 
     def _create_observation_space(self):
         raise NotImplementedError
@@ -42,13 +59,13 @@ class AdEnv(gym.Env):
 
     def step(self, action):
         assert self.action_space.contains(action)
-        assert (1 < self.current_state[Keyword.STEPS_FROM_ALERT] < self.max_steps_from_alert and action == 0) \
-               or self.current_state[Keyword.STEPS_FROM_ALERT] == 1 \
-               or self.current_state[Keyword.STEPS_FROM_ALERT] == self.max_steps_from_alert, \
+        assert (1 < self.current_state.steps_from_alert < self.max_steps_from_alert and action == 0) \
+               or self.current_state.steps_from_alert == 1 \
+               or self.current_state.steps_from_alert == self.max_steps_from_alert, \
             'Must choose wait action if alert is triggered'
 
         self.last_action = action
-        transitions = self.P[self.current_state[Keyword.TEMPERATURE]][self.current_state[Keyword.STEPS_FROM_ALERT]][
+        transitions = self.P[self.current_state.temperature][self.current_state.steps_from_alert][
             action]
 
         i = categorical_sample([t[0] for t in transitions], self.np_random)
@@ -57,8 +74,8 @@ class AdEnv(gym.Env):
         return self.current_state, reward, done, {}
 
     def reset(self):
-        self.current_state[Keyword.TEMPERATURE] = self.max_temp // 2 + 1
-        self.current_state[Keyword.STEPS_FROM_ALERT] = self.max_steps_from_alert
+        self.current_state.temperature = self.max_temp // 2 + 1
+        self.current_state.steps_from_alert = self.max_steps_from_alert
         return self._get_obs()
 
     def close(self):
@@ -100,14 +117,14 @@ class AdEnv(gym.Env):
     def render(self, mode='human'):
         desc = np.arange(0, self.max_temp + 1, 1).tolist()
 
-        if self.current_state[Keyword.STEPS_FROM_ALERT] is not None:
+        if self.current_state.steps_from_alert is not None:
             steps = "-"
-            if self.current_state[Keyword.STEPS_FROM_ALERT] < self.max_steps_from_alert:
-                steps = self.current_state[Keyword.STEPS_FROM_ALERT]
+            if self.current_state.steps_from_alert < self.max_steps_from_alert:
+                steps = self.current_state.steps_from_alert
             print("Steps from alert: {}".format(steps))
 
         for i in desc:
-            if i == self.current_state[Keyword.TEMPERATURE]:
+            if i == self.current_state.temperature:
                 print(f'{Fore.RED}{desc[i]}{Style.RESET_ALL}', end=" ")
             else:
                 print(desc[i], end=" ")

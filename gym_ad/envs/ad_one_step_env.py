@@ -30,7 +30,7 @@ class AdOneStepEnv(AdEnv):
 
     def reset(self):
         self.current_state[Keyword.TEMPERATURE] = self.max_temp // 2 + 1
-        self.current_state[Keyword.STEPS_FROM_ALERT] = self.max_steps_from_alert
+        self.current_state[Keyword.STEPS_FROM_ALERT] = self._max_steps_from_alert
         return self._get_obs()
 
     def close(self):
@@ -61,13 +61,13 @@ class AdOneStepEnv(AdEnv):
 
                         delta_step_from_alert = None
 
-                        if steps_from_alert == self.max_steps_from_alert:
+                        if steps_from_alert == self._max_steps_from_alert:
                             if action == 0:
                                 delta_step_from_alert = 0
                             else:
                                 delta_step_from_alert = -1
 
-                        elif 1 < steps_from_alert < self.max_steps_from_alert:
+                        elif 1 < steps_from_alert < self._max_steps_from_alert:
                             if action == 0:
                                 delta_step_from_alert = -1
                             else:
@@ -82,9 +82,9 @@ class AdOneStepEnv(AdEnv):
 
                         elif steps_from_alert == 0:
                             if action == 0:
-                                delta_step_from_alert = self.max_steps_from_alert
+                                delta_step_from_alert = self._max_steps_from_alert
                             else:
-                                delta_step_from_alert = self.max_steps_from_alert - 1
+                                delta_step_from_alert = self._max_steps_from_alert - 1
 
                         for i in range(len(prob_list) - 1):
                             temp_delta = temperature_delta_list[i]
@@ -109,13 +109,13 @@ class AdOneStepEnv(AdEnv):
                         reward = self.reward_false_alert if steps_from_alert == 1 else 0
                         delta_step_from_alert = 0
 
-                        if steps_from_alert == self.max_steps_from_alert:
+                        if steps_from_alert == self._max_steps_from_alert:
                             if action == 0:
                                 delta_step_from_alert = 0
                             else:
                                 delta_step_from_alert = -1
 
-                        elif 1 <= steps_from_alert < self.max_steps_from_alert:
+                        elif 1 <= steps_from_alert < self._max_steps_from_alert:
                             if action == 0:
                                 delta_step_from_alert = -1
                             else:
@@ -123,9 +123,9 @@ class AdOneStepEnv(AdEnv):
 
                         elif steps_from_alert == 0:
                             if action == 0:
-                                delta_step_from_alert = self.max_steps_from_alert
+                                delta_step_from_alert = self._max_steps_from_alert
                             else:
-                                delta_step_from_alert = self.max_steps_from_alert - 1
+                                delta_step_from_alert = self._max_steps_from_alert - 1
 
                         for i in range(len(prob_list)):
                             self._append_to_transition_wrapper(P,
@@ -146,7 +146,7 @@ class AdOneStepEnv(AdEnv):
                             done = True if temp_delta == -1 else False
                             reward = 0
 
-                            if steps_from_alert == self.max_steps_from_alert:
+                            if steps_from_alert == self._max_steps_from_alert:
                                 if action == 0:
                                     delta_step_from_alert = 0
                                     if temp_delta == -1:
@@ -156,7 +156,7 @@ class AdOneStepEnv(AdEnv):
                                     if temp_delta == -1:
                                         reward = self._get_good_alert_reward(steps_from_alert=self.alert_prediction_steps)
 
-                            elif 1 < steps_from_alert < self.max_steps_from_alert:
+                            elif 1 < steps_from_alert < self._max_steps_from_alert:
                                 if action == 0:
                                     delta_step_from_alert = -1
                                     if temp_delta == -1:
@@ -176,11 +176,11 @@ class AdOneStepEnv(AdEnv):
 
                             elif steps_from_alert == 0:
                                 if action == 0:
-                                    delta_step_from_alert = self.max_steps_from_alert
+                                    delta_step_from_alert = self._max_steps_from_alert
                                     if temp_delta == -1:
                                         reward = self.reward_missed_alert
                                 else:
-                                    delta_step_from_alert = self.max_steps_from_alert - 1
+                                    delta_step_from_alert = self._max_steps_from_alert - 1
                                     if temp_delta == -1:
                                         reward = self._get_good_alert_reward(steps_from_alert=
                                                                              self.alert_prediction_steps)
@@ -201,7 +201,7 @@ class AdOneStepEnv(AdEnv):
                             reward = 0
                             done = False
 
-                            delta_step_from_alert = self.max_steps_from_alert - steps_from_alert
+                            delta_step_from_alert = self._max_steps_from_alert - steps_from_alert
 
                             self._append_to_transition_wrapper(P,
                                                                prob=1,
