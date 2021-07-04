@@ -3,6 +3,7 @@ import pandas as pd
 from os import path
 from config import Keyword
 import plotly.express as px
+from gym_ad.utils_taxi import decode_state
 
 
 def plot_prob(policy):
@@ -45,13 +46,13 @@ def update_reward(reward, gamma, step_reward):
     return reward * gamma + step_reward
 
 
-def render(env, policy, gamma, steps=100):
+def render_ad(env, policy, gamma, steps=100):
     reward = 0
     state = env.reset()
     env.render()
     print()
     for t in range(steps):
-        action = policy[state[Keyword.TEMPERATURE]][state[Keyword.STEPS_FROM_ALERT]]
+        action = policy[state]
         print("Action: {}".format(["Wait", "Alert"][action]))
 
         state, step_reward, done, _ = env.step(action)
@@ -103,8 +104,8 @@ def add_to_report(policy, value_function, config):
     return max_temp_alert, value
 
 
-def analyze_max_uct_statistics(statistics: pd.DataFrame()):
-    statistics = statistics.drop(columns=['Unnamed: 0'], axis=1)
+def analyze_thts_statistics(statistics: pd.DataFrame()):
+    # statistics = statistics.drop(columns=['Unnamed: 0'], axis=1)
     reward_stats = statistics.groupby("Run").sum()["Reward"]
     temperature_policy = {}
     for temperature in sorted(list(statistics["Temperature"].unique())):
@@ -117,3 +118,29 @@ def analyze_max_uct_statistics(statistics: pd.DataFrame()):
     temperature_policy_df = pd.DataFrame.from_dict(temperature_policy, orient='index')
     print(temperature_policy_df)
     print(reward_stats)
+
+
+def add_step_to_statistic(env,
+                          state,
+                          statistics: pd.DataFrame(),
+                          run: int,
+                          action: int,
+                          reward: float,
+                          terminal: bool):
+    data = dict()
+    data['Run'] = run
+    if env.spec.id == "ad-v1":
+        data['state'] = "{}_{}".format(state[0], state[1])
+    elif env.spec.id == "Taxi-v4":
+        decoded_initial_state = decode_state(env, state)
+        data['state'] = decoded_initial_state.__str__()
+
+    data['Action'] = action
+    data['Reward'] = reward
+    data['Terminal'] = terminal
+    if env.spec.id == "ad-v1":
+        data['ignore'] = 1 if state[1] < env.max_steps_from_alert else 0
+
+    step_statistic = pd.DataFrame(data=data, index=[0])
+    statistics = pd.concat([statistics, step_statistic], axis=0, ignore_index=True)
+    return statistics

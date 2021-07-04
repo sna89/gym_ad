@@ -1,10 +1,10 @@
-from gym_ad.envs.ad_env import State
+from gym_ad.envs.ad_env import GymAdState
 from utils import get_argmax_from_list
 import numpy as np
 
 
 class Node:
-    def __init__(self, state: State, parent=None):
+    def __init__(self, state, parent=None):
         self._state = state
         self.parent = parent
         self._value = 0
@@ -43,9 +43,10 @@ class Node:
 
 
 class DecisionNode(Node):
-    def __init__(self, state: State, parent=None, terminal=False):
+    def __init__(self, state, parent=None, terminal=False, prob=1):
         super(DecisionNode, self).__init__(state, parent)
         self.terminal = terminal
+        self.prob = prob
 
     def select_chance_node(self):
         successor_nodes_uct_values = [chance_node.uct for chance_node in self.successors]
@@ -61,9 +62,12 @@ class DecisionNode(Node):
             value = max([node.value for node in self.successors])
         self.value = value
 
+    def backup_dp_uct(self):
+        self.backup_max_uct()
+
 
 class ChanceNode(Node):
-    def __init__(self, state: State, parent=None, action=None, uct_bias=0):
+    def __init__(self, state: GymAdState, parent=None, action=None, uct_bias=0):
         super(ChanceNode, self).__init__(state, parent)
         self._action = action
         self._reward = 0
@@ -99,5 +103,15 @@ class ChanceNode(Node):
 
         denominator = self.visits
         q_value = self.reward + nominator / float(denominator)
+        self.value = q_value
+
+    def backup_dp_uct(self):
+        nominator = 0
+        sum_explicit_tree_prob = 0
+        for decision_node in self.successors:
+            nominator += decision_node.prob * decision_node.value
+            sum_explicit_tree_prob += decision_node.prob
+
+        q_value = self.reward + nominator / sum_explicit_tree_prob
         self.value = q_value
 

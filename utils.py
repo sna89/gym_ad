@@ -26,5 +26,8 @@ def get_argmax_from_list(l: List, choose_random=True):
 
 
 def set_env_to_state(env, state):
-    env.current_state = state
+    if env.spec.id == "Taxi-v4":
+        env.s = state
+    elif env.spec.id == 'ad-v1':
+        env.current_state = state
 

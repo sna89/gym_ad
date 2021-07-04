@@ -17,3 +17,9 @@ register(
     kwargs={"config": config_ad_v1}
 
 )
+
+register(
+    id='Taxi-v4',
+    entry_point='gym_ad.envs:TaxiEnvV4',
+    # max_episode_steps=200,
+)

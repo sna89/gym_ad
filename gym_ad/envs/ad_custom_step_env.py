@@ -4,7 +4,7 @@ from config import Keyword
 import math
 import numpy as np
 from utils import normalize_list_values
-from gym_ad.envs.ad_env import State
+from gym_ad.envs.ad_env import GymAdState
 
 
 class AdCustomStepEnv(AdEnv):
@@ -25,11 +25,6 @@ class AdCustomStepEnv(AdEnv):
     def _create_action_space(self):
         return spaces.Discrete(2)
 
-    def reset(self):
-        self.current_state.temperature = self.max_temp // 2
-        self.current_state.steps_from_alert = self._max_steps_from_alert
-        return self._get_obs()
-
     def _create_transition(self):
         P = self._init_transition_matrix()
 
@@ -41,18 +36,21 @@ class AdCustomStepEnv(AdEnv):
             for steps_from_alert in range(1, num_states_steps_from_alert + 1):
                 for action in range(num_actions):
                     if curr_temp == 0:
-                        reward = 0
-                        done = False
-                        next_steps_from_alert = self._max_steps_from_alert - action
-                        self._append_to_transition_wrapper(P,
-                                                           prob=1,
-                                                           curr_temperature=curr_temp,
-                                                           next_temperature=self.max_temp // 2,
-                                                           curr_steps_from_alert=steps_from_alert,
-                                                           next_step_from_alert=next_steps_from_alert,
-                                                           action=action,
-                                                           reward=reward,
-                                                           done=done)
+                        if action == 0:
+                            reward = 0
+                            done = False
+                            next_steps_from_alert = self._max_steps_from_alert
+                            self._append_to_transition_wrapper(P,
+                                                               prob=1,
+                                                               curr_temperature=curr_temp,
+                                                               next_temperature=self.max_temp // 2,
+                                                               curr_steps_from_alert=steps_from_alert,
+                                                               next_step_from_alert=next_steps_from_alert,
+                                                               action=action,
+                                                               reward=reward,
+                                                               done=done)
+                        else:
+                            continue
 
                     else:
                         next_temp_possible_value_list, next_temp_prob_list = self._create_state_prob(curr_temp)
@@ -132,7 +130,7 @@ class AdCustomStepEnv(AdEnv):
                                       done
                                       ):
 
-        next_state = State(next_temperature, next_step_from_alert)
+        next_state = (int(next_temperature), int(next_step_from_alert))
 
         self._append_to_transition(P, curr_temperature, curr_steps_from_alert, action, prob,
                                    next_state, reward, done)
